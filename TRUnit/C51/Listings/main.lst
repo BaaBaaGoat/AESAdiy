@@ -1,0 +1,338 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              08/20/2022 21:20:47 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\main
+                    -.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include "STC8G.h"
+   2          #include "intrins.h"
+   3          #define GPIO_CTRL1P P13
+   4          #define GPIO_CTRL1N P14
+   5          #define GPIO_CTRL2P P10
+   6          #define GPIO_CTRL2N P37
+   7          #define GPIO_CTRL3P P35
+   8          #define GPIO_CTRL3N P36
+   9          #define GPIO_CTRL4P P17
+  10          #define GPIO_CTRL4N P54
+  11          #define GPIO_CTRL5P P15
+  12          #define GPIO_CTRL5N P16
+  13          #define GPIO_CTRL6P P12
+  14          #define GPIO_CTRL6N P11
+  15          #define GPIO_RXEN P34
+  16          #define GPIO_TXEN P33
+  17          #define BAUDRATE 115200
+  18          #define CRYSTAL 11059200
+  19          #define EEPROM_MCUADDRESS 0x0400
+  20          // Í¨ÐÅÐ­Òé:
+  21          #define TYPE_SETADDR 0x01
+  22          // ÉèÖÃµØÖ·£º    AA55 01 FF XX CRC,XXÎªµØÖ· 0x01~0xFEÓÐÐ§
+  23          // ³É¹¦£º»Ø55AA 01 XX 01 CRC XXÎªµØÖ·
+  24          // Ê§°Ü£º»Ø55AA 01 XX EE CRC
+  25          #define TYPE_SETSWITCH 0x02
+  26          // ÉèÖÃ¿ª¹Ø×´Ì¬£ºAA55 02 XX YY CRC,XXÎªµØÖ·(µØÖ·Ò»ÖÂ»òÎªXX=0xFF¹ã²¥µØÖ·Ê±£¬Ä£¿é»áÏìÓ¦),YYÎªÊý¾Ý£¬Î»ÓòÈçÏÂ£
+             -º
+  27          // B7   B6   B5   B4   B3   B2   B1   B0
+  28          // TRX1 C1_2 C1_1 C1_0 EN C2_2 C2_1 C2_0
+  29          // TRX±íÊ¾ÊÕ·¢ÇÐ»» 1Îª·¢0ÎªÊÕ
+  30          // EN=1±íÊ¾ÉäÆµ»ØÂ·Í¨ 0¶Ï
+  31          // C1±íÊ¾1ºÅ(³öÏß³¯ÏÂ ´Ó³ö²¨Ò»Ãæ¿´ÓÒ±ß£©ÌìÏßÒÆÏàÆ÷ÒÆÏàÖµ 000=0¡ã  001=45¡ã  111=315¡ã   C2Í¬Àí
+  32          // ³É¹¦£º»Ø55AA 01 XX 01 CRC XXÎªµØÖ·
+  33          // Ê§°Ü£º»Ø55AA 01 XX EE CRC
+  34          // ÉÏÊöCRCËã·¨Îª´ÓAA55ºó£¨²»º¬AA55£© µ½CRCÖ®Ç°µÄÊý¾ÝÖð×Ö½ÚÏà¼ÓÇóºÍµÄµÍ8Î»
+  35          #define TYPE_IAP 0x03
+  36          // Éý¼¶¹Ì¼þ£ºAA55 03 FF 00 02
+  37          
+  38          //  ÓÒÉÏÌìÏß    ÓÒÏÂÌìÏß  
+  39          //¿ØÖÆÖµ  ÏàÎ»  ·ù¶È  ÏàÎ»  ·ù¶È
+  40          //0 70.92 27.7  66.3  27.88
+  41          //1 120.23  26.98 117.3 27.2
+  42          //2 162.23  28.49 162.22  28.53
+  43          //3 -148.48 28.4  -149.62 28
+  44          //4 -97.57  27.33 -100.76 27.01
+  45          //5 -53.72  26.72 -57.64  26.45
+  46          //6 -14.15  28.73 -16.84  28.29
+  47          //7 35.90   29.52 31.34 29.15
+  48          //¹éÒ»»¯  ÓÒÉÏÌìÏß    ÓÒÏÂÌìÏß  
+  49          //¿ØÖÆÖµ  ÏàÎ»Îó²î  ·ù¶È  ÏàÎ»Îó²î  ·ù¶È
+  50          //0 0   0.0   0   0.0 
+  51          //1 4   -0.7  6   -0.7 
+  52          //2 1   0.8   6   0.7 
+  53          //3 6   0.7   9   0.1 
+C51 COMPILER V9.60.0.0   MAIN                                                              08/20/2022 21:20:47 PAGE 2   
+
+  54          //4 12  -0.4  13  -0.9 
+  55          //5 10  -1.0  11  -1.4 
+  56          //6 5   1.0   7   0.4 
+  57          //7 10  1.8   10  1.3 
+  58          
+  59          unsigned char MCUADDRESS;
+  60          
+  61          enum{UART_RX_IDLE,UART_RX_GotPreamble1,UART_RX_Recving,UART_RX_FINISH} uartRxStat=UART_RX_IDLE;
+  62          unsigned char UARTRxBuf[8]; 
+  63          unsigned char UARTRxCount=0;
+  64          
+  65          enum{UART_TX_IDLE,UART_TX_Ongoing} uartTxStat=UART_TX_IDLE;
+  66          unsigned char UARTTxBuf[8]; 
+  67          unsigned char UARTTxLen=0;
+  68          unsigned char UARTTxCount=0;
+  69          
+  70          
+  71          
+  72          
+  73          void UART1_Routine() interrupt 4
+  74          {
+  75   1        unsigned char D;
+  76   1          if (TI)
+  77   1          {
+  78   2              TI = 0;
+  79   2              switch(uartTxStat){
+  80   3                case UART_TX_IDLE:break;
+  81   3                case UART_TX_Ongoing:
+  82   3                  UARTTxCount ++;
+  83   3                  if(UARTTxCount >= UARTTxLen){
+  84   4                    uartTxStat=UART_TX_IDLE;
+  85   4                  }else{
+  86   4                    SBUF = UARTTxBuf[UARTTxCount];
+  87   4                  }
+  88   3                  break;
+  89   3              }
+  90   2          }
+  91   1          if (RI)
+  92   1          {
+  93   2              RI = 0;
+  94   2              D = SBUF;
+  95   2              switch(uartRxStat){
+  96   3                case UART_RX_IDLE:
+  97   3                  if(D == 0xAA){
+  98   4                    UARTRxCount=0;
+  99   4                    UARTRxBuf[UARTRxCount] = D;
+ 100   4                    UARTRxCount++;
+ 101   4                    uartRxStat=UART_RX_GotPreamble1;
+ 102   4                    break;
+ 103   4                  }
+ 104   3                  break;
+ 105   3                case UART_RX_GotPreamble1:
+ 106   3                  if(D == 0x55){
+ 107   4                    UARTRxBuf[UARTRxCount] = D;
+ 108   4                    UARTRxCount++;
+ 109   4                    uartRxStat=UART_RX_Recving;
+ 110   4                    break;
+ 111   4                  }else{
+ 112   4                    uartRxStat=UART_RX_IDLE;
+ 113   4                    UARTRxCount=0;
+ 114   4                  }
+ 115   3                  break;
+C51 COMPILER V9.60.0.0   MAIN                                                              08/20/2022 21:20:47 PAGE 3   
+
+ 116   3                case UART_RX_Recving:
+ 117   3                    UARTRxBuf[UARTRxCount] = D;
+ 118   3                    UARTRxCount++;
+ 119   3                    if(UARTRxCount >= 6){
+ 120   4                      uartRxStat=UART_RX_FINISH;
+ 121   4                    }
+ 122   3                case UART_RX_FINISH:
+ 123   3                  break;
+ 124   3              }
+ 125   2            
+ 126   2            
+ 127   2          }
+ 128   1      }
+ 129          void UART_SendFrame(char Type,char Data){
+ 130   1        UARTTxBuf[0] = 0x55;
+ 131   1        UARTTxBuf[1] = 0xAA;
+ 132   1        UARTTxBuf[2] = Type;
+ 133   1        UARTTxBuf[3] = MCUADDRESS;
+ 134   1        UARTTxBuf[4] = Data;
+ 135   1        UARTTxBuf[5] = UARTTxBuf[2]+UARTTxBuf[3]+UARTTxBuf[4];
+ 136   1        
+ 137   1        uartTxStat=UART_TX_Ongoing;
+ 138   1        UARTTxCount=0;
+ 139   1        UARTTxLen=6;
+ 140   1        SBUF = UARTTxBuf[UARTTxCount];
+ 141   1      }
+ 142          
+ 143          void IapIdle()
+ 144          {
+ 145   1          IAP_CONTR = 0;                              //¹Ø±ÕIAP¹¦ÄÜ
+ 146   1          IAP_CMD = 0;                                //Çå³ýÃüÁî¼Ä´æÆ÷
+ 147   1          IAP_TRIG = 0;                               //Çå³ý´¥·¢¼Ä´æÆ÷
+ 148   1          IAP_ADDRH = 0x80;                           //½«µØÖ·ÉèÖÃµ½·ÇIAPÇøÓò
+ 149   1          IAP_ADDRL = 0;
+ 150   1      }
+ 151          
+ 152          char IapRead(int addr)
+ 153          {
+ 154   1          char dat;
+ 155   1      
+ 156   1          IAP_CONTR = 0x80;                           //Ê¹ÄÜIAP
+ 157   1          IAP_TPS = 12;                               //ÉèÖÃµÈ´ý²ÎÊý12MHz
+ 158   1          IAP_CMD = 1;                                //ÉèÖÃIAP¶ÁÃüÁî
+ 159   1          IAP_ADDRL = addr;                           //ÉèÖÃIAPµÍµØÖ·
+ 160   1          IAP_ADDRH = addr >> 8;                      //ÉèÖÃIAP¸ßµØÖ·
+ 161   1          IAP_TRIG = 0x5a;                            //Ð´´¥·¢ÃüÁî(0x5a)
+ 162   1          IAP_TRIG = 0xa5;                            //Ð´´¥·¢ÃüÁî(0xa5)
+ 163   1          _nop_();
+ 164   1          dat = IAP_DATA;                             //¶ÁIAPÊý¾Ý
+ 165   1          IapIdle();                                  //¹Ø±ÕIAP¹¦ÄÜ
+ 166   1      
+ 167   1          return dat;
+ 168   1      }
+ 169          
+ 170          void IapProgram(int addr, char dat)
+ 171          {
+ 172   1          IAP_CONTR = 0x80;                           //Ê¹ÄÜIAP
+ 173   1          IAP_TPS = 12;                               //ÉèÖÃµÈ´ý²ÎÊý12MHz
+ 174   1          IAP_CMD = 2;                                //ÉèÖÃIAPÐ´ÃüÁî
+ 175   1          IAP_ADDRL = addr;                           //ÉèÖÃIAPµÍµØÖ·
+ 176   1          IAP_ADDRH = addr >> 8;                      //ÉèÖÃIAP¸ßµØÖ·
+ 177   1          IAP_DATA = dat;                             //Ð´IAPÊý¾Ý
+C51 COMPILER V9.60.0.0   MAIN                                                              08/20/2022 21:20:47 PAGE 4   
+
+ 178   1          IAP_TRIG = 0x5a;                            //Ð´´¥·¢ÃüÁî(0x5a)
+ 179   1          IAP_TRIG = 0xa5;                            //Ð´´¥·¢ÃüÁî(0xa5)
+ 180   1          _nop_();
+ 181   1          IapIdle();                                  //¹Ø±ÕIAP¹¦ÄÜ
+ 182   1      }
+ 183          
+ 184          void IapErase(int addr)
+ 185          {
+ 186   1          IAP_CONTR = 0x80;                           //Ê¹ÄÜIAP
+ 187   1          IAP_TPS = 12;                               //ÉèÖÃµÈ´ý²ÎÊý12MHz
+ 188   1          IAP_CMD = 3;                                //ÉèÖÃIAP²Á³ýÃüÁî
+ 189   1          IAP_ADDRL = addr;                           //ÉèÖÃIAPµÍµØÖ·
+ 190   1          IAP_ADDRH = addr >> 8;                      //ÉèÖÃIAP¸ßµØÖ·
+ 191   1          IAP_TRIG = 0x5a;                            //Ð´´¥·¢ÃüÁî(0x5a)
+ 192   1          IAP_TRIG = 0xa5;                            //Ð´´¥·¢ÃüÁî(0xa5)
+ 193   1          _nop_();                                    //
+ 194   1          IapIdle();                                  //¹Ø±ÕIAP¹¦ÄÜ
+ 195   1      }
+ 196          
+ 197          
+ 198          void main()
+ 199          {
+ 200   1        unsigned int T2Val;
+ 201   1        int i;
+ 202   1        unsigned char TRX,Enable,C1,C2; 
+ 203   1        // ³õÊ¼»¯GPIO
+ 204   1        P1M0=0xff;P1M1=0x00;
+ 205   1        P3M0=0xfc;P3M1=0x01; // ´®¿ÚÎª¿ªÂ©Êä³ö ¿ÉÒÔ¶à¸ö½ÓÒ»Æð ÓÃµØÖ·½øÐÐÑ¡Ôñ
+ 206   1        P5M0 |= 0x10;
+ 207   1        P5M1 &= 0xEF;
+ 208   1        GPIO_TXEN =0;
+ 209   1        GPIO_RXEN =0;
+ 210   1        
+ 211   1        GPIO_CTRL4N =1;
+ 212   1        GPIO_CTRL4P =0;
+ 213   1        GPIO_CTRL5N =1;
+ 214   1        GPIO_CTRL5P =0;
+ 215   1        GPIO_CTRL6N =1;
+ 216   1        GPIO_CTRL6P =0;
+ 217   1        
+ 218   1        GPIO_CTRL1N =1;
+ 219   1        GPIO_CTRL1P =0;
+ 220   1        GPIO_CTRL2N =1;
+ 221   1        GPIO_CTRL2P =0;
+ 222   1        GPIO_CTRL3N =1;
+ 223   1        GPIO_CTRL3P =0;
+ 224   1        
+ 225   1        // ³õÊ¼»¯´®¿Ú
+ 226   1        SCON = 0x50;
+ 227   1        T2Val = 65536-CRYSTAL/BAUDRATE/4;
+ 228   1        T2L = T2Val&0xFF;                                 //65536-11059200/115200/4=0FFE8H
+ 229   1        T2H = T2Val>>8;
+ 230   1        AUXR = 0x15;                                //Æô¶¯¶¨Ê±Æ÷
+ 231   1        // ¶Á±¾»úµØÖ·
+ 232   1        MCUADDRESS=IapRead(EEPROM_MCUADDRESS);
+ 233   1        if(MCUADDRESS == 0x00 || MCUADDRESS == 0xFF){
+ 234   2          MCUADDRESS = 0x01;
+ 235   2          IapErase(EEPROM_MCUADDRESS);
+ 236   2          IapProgram(EEPROM_MCUADDRESS,MCUADDRESS);
+ 237   2        }
+ 238   1        
+ 239   1        GPIO_TXEN = MCUADDRESS < 0x80;
+C51 COMPILER V9.60.0.0   MAIN                                                              08/20/2022 21:20:47 PAGE 5   
+
+ 240   1        GPIO_RXEN = MCUADDRESS >= 0x80;
+ 241   1        // ³õÊ¼»¯ÖÐ¶Ï
+ 242   1        ES = 1;// ¿ª´®¿ÚÖÐ¶Ï
+ 243   1        EA = 1;// ¿ª×ÜÖÐ¶Ï
+ 244   1        //´®¿Ú×´Ì¬»ú
+ 245   1          while (1){
+ 246   2            if(UART_RX_FINISH==uartRxStat){
+ 247   3              unsigned char Type = UARTRxBuf[2];
+ 248   3              unsigned char Dest = UARTRxBuf[3];
+ 249   3              unsigned char Data = UARTRxBuf[4];
+ 250   3              unsigned char calcCRC = UARTRxBuf[2]+UARTRxBuf[3]+UARTRxBuf[4];
+ 251   3              if(calcCRC==UARTRxBuf[5] && (Dest==MCUADDRESS||Dest==0xFF)){
+ 252   4                switch(Type){
+ 253   5                  case TYPE_SETADDR:{
+ 254   6                    if(Data == 0x00 || Data == 0xFF)UART_SendFrame(Type,0xEE);
+ 255   6                    else{
+ 256   7                      MCUADDRESS = Data;
+ 257   7                      IapErase(EEPROM_MCUADDRESS);
+ 258   7                      IapProgram(EEPROM_MCUADDRESS,MCUADDRESS);
+ 259   7                      UART_SendFrame(Type,MCUADDRESS);
+ 260   7                    }
+ 261   6                  }break;
+ 262   5                  case TYPE_SETSWITCH:{
+ 263   6                    // TODO
+ 264   6                    TRX = (Data & 0x80)>>7;
+ 265   6                    C1 = (Data & 0x70)>>4;
+ 266   6                    Enable = (Data & 0x08)>>3;
+ 267   6                    C2 = (Data & 0x07);
+ 268   6                    
+ 269   6                    GPIO_TXEN = TRX && Enable;
+ 270   6                    GPIO_RXEN = (!TRX) && Enable;
+ 271   6                    
+ 272   6                    GPIO_CTRL6N = ((C1&0x4)>>2);
+ 273   6                    GPIO_CTRL6P = !((C1&0x4)>>2);
+ 274   6                    GPIO_CTRL5N = ((C1&0x2)>>1);
+ 275   6                    GPIO_CTRL5P = !((C1&0x2)>>1);
+ 276   6                    GPIO_CTRL4N = (C1&0x1);
+ 277   6                    GPIO_CTRL4P = !(C1&0x1);
+ 278   6                    
+ 279   6                    GPIO_CTRL3N = ((C2&0x4)>>2);
+ 280   6                    GPIO_CTRL3P = !((C2&0x4)>>2);
+ 281   6                    GPIO_CTRL2N = ((C2&0x2)>>1);
+ 282   6                    GPIO_CTRL2P = !((C2&0x2)>>1);
+ 283   6                    GPIO_CTRL1N = (C2&0x1);
+ 284   6                    GPIO_CTRL1P = !(C2&0x1);
+ 285   6                    
+ 286   6                    UART_SendFrame(Type,0x00);
+ 287   6                  }break;
+ 288   5                  case TYPE_IAP:{
+ 289   6                    if(Data != 0x00)UART_SendFrame(Type,0xEE);
+ 290   6                    else{
+ 291   7                      UART_SendFrame(Type,0x00);
+ 292   7                      for(i=0;i<10000;i++);
+ 293   7                      IAP_CONTR |= 0x60;//¸´Î»µ½ISP
+ 294   7                    }
+ 295   6                  }break;
+ 296   5                  default:UART_SendFrame(Type,0xEE);
+ 297   5                }
+ 298   4              }
+ 299   3              
+ 300   3              uartRxStat=UART_RX_IDLE;
+ 301   3            }
+C51 COMPILER V9.60.0.0   MAIN                                                              08/20/2022 21:20:47 PAGE 6   
+
+ 302   2          }
+ 303   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    665    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     22       4
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
